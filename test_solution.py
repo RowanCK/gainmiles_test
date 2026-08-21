@@ -3,6 +3,7 @@ from solution import (
     TransformationError,
     amount_to_minor_units,
     extract_first_name,
+    parse_date,
     process_orders,
     transform_billing,
     transform_notification,
@@ -224,3 +225,54 @@ def test_process_orders_isolates_shipping_failure():
 
     assert len(results["billing"]["success"]) == 1
     assert len(results["notification"]["success"]) == 1
+
+
+def test_process_orders_isolates_multiple_service_failures():
+    order = {
+        "ord_no": "ORD1009",
+        "cust_nm": "ROSSI, GIULIA",
+        "ord_dt": "20240415",
+        "amt": "",
+        "ccy": "EUR",
+        "ship_ctry": "",
+        "cust_email": "giulia.rossi@example.com",
+        "gift_flag": "N",
+        "status": "1",
+    }
+
+    results = process_orders([order])
+
+    assert results["shipping"]["success"] == []
+    assert results["shipping"]["errors"] == [
+        {
+            "order_id": "ORD1009",
+            "error": "Missing shipping country",
+        }
+    ]
+
+    assert results["billing"]["success"] == []
+    assert results["billing"]["errors"] == [
+        {
+            "order_id": "ORD1009",
+            "error": "Missing amount",
+        }
+    ]
+
+    assert len(results["notification"]["success"]) == 1
+    assert results["notification"]["errors"] == []
+
+
+def test_billing_rejects_invalid_amount():
+    with pytest.raises(
+        TransformationError,
+        match="Invalid amount: abc",
+    ):
+        amount_to_minor_units("abc", "USD")
+
+
+def test_billing_rejects_invalid_date():
+    with pytest.raises(
+        TransformationError,
+        match="Invalid order date: 20241301",
+    ):
+        parse_date("20241301")
