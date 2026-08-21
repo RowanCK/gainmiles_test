@@ -183,10 +183,21 @@ def amount_to_minor_units(amount: str, currency: str) -> int:
             f"Invalid amount: {amount}"
         )
 
+    if not decimal_amount.is_finite():
+        raise TransformationError(
+            f"Invalid amount: {amount}"
+        )
+
     minor_units = CURRENCY_MINOR_UNITS[currency]
     multiplier = Decimal(10) ** minor_units
+    minor_amount = decimal_amount * multiplier
 
-    return int(decimal_amount * multiplier)
+    if minor_amount != minor_amount.to_integral_value():
+        raise TransformationError(
+            f"Amount has too many decimal places for {currency}: {amount}"
+        )
+
+    return int(minor_amount)
 
 
 def extract_first_name(full_name: str) -> Optional[str]:

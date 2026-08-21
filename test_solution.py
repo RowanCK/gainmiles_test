@@ -276,3 +276,11 @@ def test_billing_rejects_invalid_date():
         match="Invalid order date: 20241301",
     ):
         parse_date("20241301")
+
+
+def test_billing_rejects_excess_decimal_places():
+    with pytest.raises(
+        TransformationError,
+        match="Amount has too many decimal places for USD: 1.999",
+    ):
+        amount_to_minor_units("1.999", "USD")
