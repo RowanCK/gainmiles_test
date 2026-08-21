@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from enum import Enum
@@ -165,6 +166,42 @@ def transform_notification(order: dict[str, str]) -> dict[str, object]:
     return result
 
 
-if __name__ == "__main__":
+def process_orders(
+    orders: list[dict[str, str]],
+) -> dict[str, dict[str, list[dict[str, object]]]]:
+    transformers = {
+        "shipping": transform_shipping,
+        "billing": transform_billing,
+        "notification": transform_notification,
+    }
+
+    results = {
+        service_name: {
+            "success": [],
+            "errors": [],
+        }
+        for service_name in transformers
+    }
+
     for order in orders:
-        print(order)
+        order_id = order.get("ord_no", "UNKNOWN")
+
+        for service_name, transformer in transformers.items():
+            try:
+                transformed_order = transformer(order)
+            except TransformationError as exc:
+                results[service_name]["errors"].append({
+                    "order_id": order_id,
+                    "error": str(exc),
+                })
+            else:
+                results[service_name]["success"].append(
+                    transformed_order
+                )
+
+    return results
+
+
+if __name__ == "__main__":
+    results = process_orders(orders)
+    print(json.dumps(results, indent=2))

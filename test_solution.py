@@ -3,6 +3,7 @@ from solution import (
     TransformationError,
     amount_to_minor_units,
     extract_first_name,
+    process_orders,
     transform_billing,
     transform_notification,
     transform_shipping,
@@ -169,3 +170,57 @@ def test_notification_allows_missing_name():
         "to": "customer@example.com",
         "locale": "en-US",
     }
+
+
+def test_process_orders_isolates_billing_failure():
+    order = {
+        "ord_no": "ORD1007",
+        "cust_nm": "DUBOIS, CLAIRE",
+        "ord_dt": "20240405",
+        "amt": "",
+        "ccy": "EUR",
+        "ship_ctry": "FR",
+        "cust_email": "claire.dubois@example.com",
+        "gift_flag": "N",
+        "status": "2",
+    }
+
+    results = process_orders([order])
+
+    assert len(results["shipping"]["success"]) == 1
+    assert len(results["notification"]["success"]) == 1
+
+    assert results["billing"]["success"] == []
+    assert results["billing"]["errors"] == [
+        {
+            "order_id": "ORD1007",
+            "error": "Missing amount",
+        }
+    ]
+
+
+def test_process_orders_isolates_shipping_failure():
+    order = {
+        "ord_no": "ORD1008",
+        "cust_nm": "MUELLER, HANS",
+        "ord_dt": "20240410",
+        "amt": "99.99",
+        "ccy": "EUR",
+        "ship_ctry": "",
+        "cust_email": "hans.mueller@example.com",
+        "gift_flag": "N",
+        "status": "1",
+    }
+
+    results = process_orders([order])
+
+    assert results["shipping"]["success"] == []
+    assert results["shipping"]["errors"] == [
+        {
+            "order_id": "ORD1008",
+            "error": "Missing shipping country",
+        }
+    ]
+
+    assert len(results["billing"]["success"]) == 1
+    assert len(results["notification"]["success"]) == 1
