@@ -2,7 +2,9 @@ import pytest
 from solution import (
     TransformationError,
     amount_to_minor_units,
+    extract_first_name,
     transform_billing,
+    transform_notification,
     transform_shipping,
 )
 
@@ -56,6 +58,7 @@ def test_shipping_requires_country():
         match="Missing shipping country",
     ):
         transform_shipping(order)
+
 
 def test_billing_usd_amount():
     order = {
@@ -113,3 +116,56 @@ def test_billing_rejects_unknown_status():
         match="Unknown status code: 5",
     ):
         transform_billing(order)
+
+
+def test_transform_notification():
+    order = {
+        "cust_email": "john.smith@example.com",
+        "cust_nm": "SMITH, JOHN",
+    }
+
+    result = transform_notification(order)
+
+    assert result == {
+        "to": "john.smith@example.com",
+        "first_name": "JOHN",
+        "locale": "en-US",
+    }
+
+
+def test_notification_extracts_first_given_name():
+    order = {
+        "cust_email": "anna.lee@example.com",
+        "cust_nm": "LEE, ANNA MARIE",
+    }
+
+    result = transform_notification(order)
+
+    assert result["first_name"] == "ANNA"
+
+
+def test_notification_requires_email():
+    order = {
+        "cust_email": "",
+        "cust_nm": "SMITH, JOHN",
+    }
+
+    with pytest.raises(
+        TransformationError,
+        match="Missing customer email",
+    ):
+        transform_notification(order)
+
+
+def test_notification_allows_missing_name():
+    order = {
+        "cust_email": "customer@example.com",
+        "cust_nm": "",
+    }
+
+    result = transform_notification(order)
+
+    assert result == {
+        "to": "customer@example.com",
+        "locale": "en-US",
+    }

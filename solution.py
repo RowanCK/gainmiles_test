@@ -1,6 +1,7 @@
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from enum import Enum
+from typing import Optional
 
 
 orders = [
@@ -39,11 +40,13 @@ class Status(Enum):
     PENDING = "PENDING"
     CANCELLED = "CANCELLED"
 
+
 STATUS_MAP = {
     "1": Status.PAID,
     "2": Status.PENDING,
     "9": Status.CANCELLED,
 }
+
 
 CURRENCY_MINOR_UNITS = {
     "USD": 2,
@@ -95,6 +98,20 @@ def amount_to_minor_units(amount: str, currency: str) -> int:
 
     return int(decimal_amount * multiplier)
 
+
+def extract_first_name(full_name: str) -> Optional[str]:
+    if not full_name or "," not in full_name:
+        return None
+
+    _, given_names = full_name.split(",", 1)
+    given_names = given_names.strip()
+
+    if not given_names:
+        return None
+
+    return given_names.split()[0]
+
+
 def transform_shipping(order: dict[str, str]) -> dict[str, object]:
     country = order.get("ship_ctry", "").strip()
 
@@ -125,6 +142,27 @@ def transform_billing(order: dict[str, str]) -> dict[str, object]:
         "placed_at": parse_date(order["ord_dt"]),
         "status": status.value,
     }
+
+
+def transform_notification(order: dict[str, str]) -> dict[str, object]:
+    email = order.get("cust_email", "").strip()
+
+    if not email:
+        raise TransformationError("Missing customer email")
+
+    result = {
+        "to": email,
+        "locale": "en-US",
+    }
+
+    first_name = extract_first_name(
+        order.get("cust_nm", "")
+    )
+
+    if first_name:
+        result["first_name"] = first_name
+
+    return result
 
 
 if __name__ == "__main__":
