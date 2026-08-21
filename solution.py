@@ -1,3 +1,8 @@
+from datetime import datetime
+from decimal import Decimal, InvalidOperation
+from enum import Enum
+
+
 orders = [
     {
         "ord_no": "ORD1001",
@@ -28,6 +33,68 @@ class TransformationError(Exception):
 
     pass
 
+
+class Status(Enum):
+    PAID = "PAID"
+    PENDING = "PENDING"
+    CANCELLED = "CANCELLED"
+
+STATUS_MAP = {
+    "1": Status.PAID,
+    "2": Status.PENDING,
+    "9": Status.CANCELLED,
+}
+
+CURRENCY_MINOR_UNITS = {
+    "USD": 2,
+    "EUR": 2,
+    "GBP": 2,
+    "JPY": 0,
+}
+
+
+def parse_status(status_code: str) -> Status:
+    try:
+        return STATUS_MAP[status_code]
+    except KeyError:
+        raise TransformationError(
+            f"Unknown status code: {status_code}"
+        )
+
+
+def parse_date(date_str: str) -> str:
+    try:
+        return datetime.strptime(
+            date_str,
+            "%Y%m%d",
+        ).date().isoformat()
+    except ValueError:
+        raise TransformationError(
+            f"Invalid order date: {date_str}"
+        )
+
+
+def amount_to_minor_units(amount: str, currency: str) -> int:
+    if not amount:
+        raise TransformationError("Missing amount")
+
+    if currency not in CURRENCY_MINOR_UNITS:
+        raise TransformationError(
+            f"Unsupported currency: {currency}"
+        )
+
+    try:
+        decimal_amount = Decimal(amount)
+    except InvalidOperation:
+        raise TransformationError(
+            f"Invalid amount: {amount}"
+        )
+
+    minor_units = CURRENCY_MINOR_UNITS[currency]
+    multiplier = Decimal(10) ** minor_units
+
+    return int(decimal_amount * multiplier)
+
 def transform_shipping(order: dict[str, str]) -> dict[str, object]:
     country = order.get("ship_ctry", "").strip()
 
@@ -41,6 +108,24 @@ def transform_shipping(order: dict[str, str]) -> dict[str, object]:
         "is_gift": order.get("gift_flag") == "Y",
         "shippable": order.get("status") == "1",
     }
+
+
+def transform_billing(order: dict[str, str]) -> dict[str, object]:
+    status = parse_status(order.get("status", ""))
+
+    return {
+        "invoice": {
+            "order_id": order["ord_no"],
+            "amount_cents": amount_to_minor_units(
+                order.get("amt", ""),
+                order.get("ccy", ""),
+            ),
+            "currency": order["ccy"],
+        },
+        "placed_at": parse_date(order["ord_dt"]),
+        "status": status.value,
+    }
+
 
 if __name__ == "__main__":
     for order in orders:
